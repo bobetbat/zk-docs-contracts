@@ -1,48 +1,61 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
-// Uncomment this line to use console.log
-// import "hardhat/console.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@ethereum-attestation-service/eas-contracts/contracts/IEAS.sol";
+import "./ZKDocsScheduler.sol";
 
 contract ZKDocsCore {
     address public contractOwner;
+    address public constant EAS_ATTEST_CONTRACT_ADDR = 0x3e95B8E249c4536FE1db2E4ce5476010767C0A05;
+    ZKDocsScheduler schedulerListenerContract;
+    IEAS easContract;
 
     struct Contract {
-        address signer;
+        address recipient;
+        address creator;
+        address contractAddressToVerifyBalance;
+        uint256 borrowingAmount;
         uint256 validUntilTime;
-        string contractType;
-        string contractMethodToCheck;
-        address contractAddressToCheck;
+        uint256 uuid;
+        string linkToIPFS;
         bool isPendingForSigner;
         bool isRevealed;
         bool isSettled;
-        uint256 uuid;
     }
 
     event ContractCreated(
-        address indexed signer,
-        uint256 uuid
+        address indexed recipient,
+        uint256 uuidOfNewContract
     );
     event ContractSettled(
         uint256 timestamp,
-        uint256 uuid
+        address indexed recipient,
+        address indexed creator,
+        string docSignedHash,
+        string ipfsLink,
+        uint256 uuidOfContract
     );
     event ContractEnded(
         uint256 timestamp,
-        uint256 uuid
+        uint256 uuidOfContract
     );
     event ContractDisputed(
         uint256 timestamp,
-        uint256 uuid
+        uint256 uuidOfContract
     );
 
     // Map creator wallet address to his/her contracts.
     mapping(address => Contract[]) public allContractsByCreator;
+    // Map uuid of a contract to contract object.
     mapping(uint256 => Contract) public contractByID;
+    // Map uuid of a contract to contract hash proof.
     mapping(uint256 => string) public contractsHashProofs;
 
-    constructor() {
+    constructor(address _schedulerAddress) {
         contractOwner = msg.sender;
+        schedulerListenerContract = ZKDocsScheduler(_schedulerAddress);
+        easContract = IEAS(EAS_ATTEST_CONTRACT_ADDR);
     }
 
     modifier onlyExistedContract(uint256 _uuid) {
@@ -61,7 +74,7 @@ contract ZKDocsCore {
         _;
     }
 
-     modifier onlyPendingForSignerContract(uint256 _uuid) {
+    modifier onlyPendingForSignerContract(uint256 _uuid) {
         require (
             contractByID[_uuid].isPendingForSigner,
             "Only settled contract can be modified"
@@ -69,38 +82,61 @@ contract ZKDocsCore {
         _;
     }
 
+    modifier onlyAttestedOnChain(bytes32 _accountSignHash) {
+        require (
+            easContract.isAttestationValid(_accountSignHash),
+            "Opps. Looks like this account not attested on chain yet"
+        );
+        _;
+    }
+
     function createContract(
-        address _signer,
+        address _recipient,
         uint256 _validTo,
-        string memory _contractType,
-        string memory _contractMethodToCheck,
-        address _contractAddrToCheck
-    ) public {
+        address _contractAddressToVerifyBalance,
+        uint256 _borrowingAmount,
+        bytes32 _creatorESignHash
+    ) public onlyAttestedOnChain(_creatorESignHash) {
         uint256 uuidOfNewContract = uint256(keccak256(abi.encodePacked(block.number, block.timestamp)));
         Contract memory newContract = Contract(
-            _signer,
+            _recipient,
+            msg.sender,
+            _contractAddressToVerifyBalance,
+            _borrowingAmount,
             _validTo,
-            _contractType,
-            _contractMethodToCheck,
-            _contractAddrToCheck,
+            uuidOfNewContract,
+            "",
             true,
             false,
-            false,
-            uuidOfNewContract
+            false
         );
 
         allContractsByCreator[msg.sender].push(newContract);
         contractByID[uuidOfNewContract] = newContract;
 
-        emit ContractCreated(_signer, uuidOfNewContract);
+        emit ContractCreated(_recipient, uuidOfNewContract);
     }
 
-    function signContract(uint256 _uuid, string memory _txHash) public onlyExistedContract(_uuid) onlyPendingForSignerContract(_uuid) {
-        contractsHashProofs[_uuid] = _txHash;
-        contractByID[_uuid].isSettled = true;
-        contractByID[_uuid].isPendingForSigner = false;
+    function signContract(
+        uint256 _uuid,
+        string memory _docSignedHash,
+        bytes32 _recipientESignHash,
+        string memory _ipfsLink
+    ) public onlyExistedContract(_uuid) onlyPendingForSignerContract(_uuid) onlyAttestedOnChain(_recipientESignHash) {
+        Contract storage _c = contractByID[_uuid];
+        contractsHashProofs[_uuid] = _docSignedHash;
+        _c.linkToIPFS = _ipfsLink;
+        _c.isSettled = true;
+        _c.isPendingForSigner = false;
 
-        emit ContractSettled(block.timestamp, _uuid);
+        emit ContractSettled(
+            block.timestamp,
+            _c.recipient,
+            _c.creator,
+            _docSignedHash,
+            _ipfsLink,
+            _uuid
+        );
     }
 
     function endContract(uint256 _uuid, address _creator) public onlyExistedContract(_uuid) {
@@ -120,10 +156,23 @@ contract ZKDocsCore {
         emit ContractEnded(block.timestamp, _uuid);
     }
 
-    function disputeContract(uint256 _uuid) public onlyExistedContract(_uuid) onlySettledContract(_uuid) {
+    function disputeContract(uint256 _uuid) private onlyExistedContract(_uuid) onlySettledContract(_uuid) {
         contractByID[_uuid].isSettled = false;
         contractByID[_uuid].isRevealed = true;
 
         emit ContractDisputed(block.timestamp, _uuid);
+    }
+
+    function checkForDisput(uint256 _uuid) public {
+        Contract memory contractToCheck = contractByID[_uuid];
+
+        if (schedulerListenerContract.shouldDoDisput(
+            contractToCheck.validUntilTime,
+            contractToCheck.contractAddressToVerifyBalance,
+            contractToCheck.creator,
+            contractToCheck.borrowingAmount
+        )) {
+            disputeContract(_uuid);
+        }
     }
 }

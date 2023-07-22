@@ -1,14 +1,16 @@
 import { ethers } from "hardhat";
 
 async function main() {
-  // const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-
+  const ZKDocsScheduler = await ethers.getContractFactory("ZKDocsScheduler");
   const ZKDocsCore = await ethers.getContractFactory("ZKDocsCore");
-  const deployPromisefully = await ZKDocsCore.deploy();
+  const schedulerDeployed = await ZKDocsScheduler.deploy();
+  await schedulerDeployed.deployed();
 
+  const addressOfScheduler = schedulerDeployed.address;
+  const deployPromisefully = await ZKDocsCore.deploy(addressOfScheduler);
   await deployPromisefully.deployed();
 
-  console.log(`Deployed to ${deployPromisefully.address}`);
+  console.log(`Core contract deployed to ${deployPromisefully.address} and scheduler to ${addressOfScheduler}`);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
