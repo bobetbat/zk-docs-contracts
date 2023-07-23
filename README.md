@@ -25,3 +25,5 @@ npx hardhat run scripts/deploy.ts
 - [Polygon zkEVM Scheduler](https://testnet-zkevm.polygonscan.com/address/0xc7256041d9f92Ca126c1140b9359d63f8C4F703b)
 - [Linea Core](https://explorer.goerli.linea.build/address/0x32E2735553C54b19938907e387c47f36B7B89cC8)
 - [Linea Scheduler](https://explorer.goerli.linea.build/address/0xc7256041d9f92Ca126c1140b9359d63f8C4F703b)
+- [Mantle Core](https://explorer.testnet.mantle.xyz/address/0x32E2735553C54b19938907e387c47f36B7B89cC8)
+- [Mantle Scheduler](https://explorer.testnet.mantle.xyz/address/0xc7256041d9f92Ca126c1140b9359d63f8C4F703b)
