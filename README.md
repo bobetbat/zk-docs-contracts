@@ -27,3 +27,9 @@ npx hardhat run scripts/deploy.ts
 - [Linea Scheduler](https://explorer.goerli.linea.build/address/0xc7256041d9f92Ca126c1140b9359d63f8C4F703b)
 - [Mantle Core](https://explorer.testnet.mantle.xyz/address/0x32E2735553C54b19938907e387c47f36B7B89cC8)
 - [Mantle Scheduler](https://explorer.testnet.mantle.xyz/address/0xc7256041d9f92Ca126c1140b9359d63f8C4F703b)
+
+- ### Our backend with depoyed on Trusted Environment
+- [Link](https://github.com/noskodmi/zk-docs-be/)
+
+- ### Our frontend with EAS
+- [Link](https://github.com/bobetbat/zk-docs-fe/)
